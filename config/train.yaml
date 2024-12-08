@@ -1,0 +1,31 @@
+model:
+  codebook_dim: 48
+  encoder_ch_mult: [1, 1, 2, 2, 4]
+  decoder_ch_mult: [1, 1, 2, 2, 4]
+  bernoulli: true
+  use_negative: false
+  z_channels: 256
+  dropout_p: 0.0
+  matryoshka: true
+  
+
+train:
+  ae_resume_path: 'experiment/bin_48_bern_01/vqvae-bin_48_bern_01-50k'
+  loss_resume_path: 'experiment/bin_48_bern_01/loss-bin_48_bern_01-50k'
+  global_step: 50000
+  exp_name: &exp_name 'matryoshka'
+  wandb_proj: *exp_name
+  output_dir: *exp_name
+  logging_dir: 'logs'
+  mixed_precision: 'no'
+  gradient_accumulation_steps: 2
+  report_to: 'wandb'
+  num_iters: 80000
+  val_every: 100
+  save_every: 2000
+  disc_start: 1
+  disc_weight: 0.05
+
+data:
+  path: '/data/Largedata/ImageNet_wds/imagenet-train-{000000..001281}.tar'
+  batch_size: 8
