@@ -1,1 +1,0 @@
-accelerate launch --main_process_port 29508 train.py
