@@ -96,6 +96,13 @@ class VQModel(nn.Module):
 
         return (dec_128, dec_64, dec_32, dec_16, dec_8, dec_4)
     
+    def get_bernoulli(self, x):
+        h = self.encoder(x)
+        h = self.quant_conv_new(h)
+        h = rearrange(h, 'b c h w -> b h w c')
+        h = torch.nn.functional.sigmoid(h).detach()
+
+        return h
     # def encode_fsq_quant(self, x):
     #     h = self.encoder(x)
     #     h = self.quant_conv_new(h)
