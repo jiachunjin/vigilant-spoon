@@ -79,7 +79,7 @@ def main():
     
     vqvae, loss, dataloader, optimizer, optimizer_disc = accelerator.prepare(vqvae, loss, dataloader, optimizer, optimizer_disc)
     if accelerator.is_main_process:
-        accelerator.init_trackers(config.train.wandb_proj)    
+        accelerator.init_trackers(config.train.wandb_proj)
 
     training_done = False
     progress_bar = tqdm(

@@ -103,6 +103,34 @@ class VQModel(nn.Module):
         h = torch.nn.functional.sigmoid(h).detach()
 
         return h
+    
+    @torch.no_grad()
+    def encode_for_gpt(self, x):
+        h = self.encoder(x)
+        h = self.quant_conv_new(h)
+        
+        h = rearrange(h, 'b c h w -> b h w c')
+        # move to [-1, 1]
+        if self.use_negative:
+            raise NotImplementedError
+            h = torch.nn.functional.tanh(h)
+            if self.bernoulli:
+                h_hat = torch.bernoulli((h + 1) / 2).to(h.dtype)
+                h_hat = h_hat * 2 - 1
+            else:
+                h_hat = (h > 0.0).to(h.dtype)
+                h_hat = h_hat * 2 - 1
+        else:
+            h = torch.nn.functional.sigmoid(h)
+            if self.bernoulli:
+                binary_samples = torch.bernoulli(h).to(h.dtype)
+            else:
+                raise NotImplementedError
+        
+        binary_samples = rearrange(binary_samples, 'b h w c -> b (h w) c')
+        h = rearrange(h, 'b h w c -> b (h w) c')
+        return binary_samples, h
+
     # def encode_fsq_quant(self, x):
     #     h = self.encoder(x)
     #     h = self.quant_conv_new(h)

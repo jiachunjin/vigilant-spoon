@@ -1,0 +1,16 @@
+train:
+  global_step:
+  exp_name: &exp_name 'gpt_dev'
+  wandb_proj: *exp_name
+  output_dir: *exp_name
+  logging_dir: 'logs'
+  mixed_precision: 'no'
+  gradient_accumulation_steps: 1
+  report_to: 'wandb'
+  num_iters: 10000
+  val_every: 1000
+  save_every: 1000
+
+data:
+  path: '/data/Largedata/ImageNet_wds/imagenet-train-{000000..001281}.tar'
+  batch_size: 64

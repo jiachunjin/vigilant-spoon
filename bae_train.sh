@@ -1,1 +1,1 @@
-accelerate launch --main_process_port 29508 bae.py
+accelerate launch --main_process_port 29508 bae_train.py
