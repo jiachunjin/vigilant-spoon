@@ -1,6 +1,6 @@
 train:
-  gpt_resume_path: 'experiment/gpt_dev/gpt-gpt_dev-10k'
-  global_step: 10000
+  gpt_resume_path: 'experiment/gpt_dev/gpt-gpt_dev-36k'
+  global_step: 36000
   exp_name: &exp_name 'gpt_dev'
   wandb_proj: *exp_name
   output_dir: *exp_name
@@ -13,5 +13,6 @@ train:
   save_every: 2000
 
 data:
-  path: '/data/Largedata/ImageNet_wds/imagenet-train-{000000..001281}.tar'
+  # path: '/data/Largedata/ImageNet_wds/imagenet-train-{000000..001281}.tar'
+  path: '/data/Largedata/ImageNet_wds/imagenet-train-{000000..0010}.tar'
   batch_size: 60
