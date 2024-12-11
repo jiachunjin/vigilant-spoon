@@ -52,6 +52,14 @@ def main():
     dataloader = get_dataloader(config.data)
     global_step = config.train.global_step if config.train.global_step is not None else 0
 
+    if config.train.gpt_resume_path is not None:
+        ckpt = torch.load(config.train.gpt_resume_path, map_location='cpu')
+        m, u = gpt.load_state_dict(ckpt, strict=False)
+        print('missing: ', m)
+        print('unexpected: ', u)
+        if accelerator.is_main_process:
+            print(f'GPT ckpt loaded from {config.train.gpt_resume_path}')
+
     params_to_learn = list(gpt.parameters())
     optimizer = torch.optim.AdamW(
         params_to_learn,
@@ -82,7 +90,8 @@ def main():
         for x, y in dataloader:
             gpt.train()
             with accelerator.accumulate([gpt]):
-                sample, h = bae.encode_for_gpt(x)
+                with torch.no_grad():
+                    sample, h = bae.encode_for_gpt(x)
                 # target_id = random.randint(0, 255)
                 # print(sample.shape, h.shape, sample.requires_grad, h.requires_grad)
                 # binary_vec = sample[:, :target_id, :]

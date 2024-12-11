@@ -295,16 +295,16 @@ class Transformer(nn.Module):
             h = self.tok_dropout(token_embeddings)
             self.freqs_cis = self.freqs_cis.to(h.device)
         else:
-            raise NotImplementedError("Not implemented yet")
-            # if cond_idx is not None: # prefill in inference
-            #     token_embeddings = self.cls_embedding(cond_idx, train=self.training)[:,:self.cls_token_num]
-            # else: # decode_n_tokens(kv cache) in inference
-            #     token_embeddings = self.tok_embeddings(idx)
+            # raise NotImplementedError("Not implemented yet")
+            if cond_idx is not None: # prefill in inference
+                token_embeddings = self.cls_embedding(cond_idx, train=self.training)[:,:self.cls_token_num]
+            else: # decode_n_tokens(kv cache) in inference
+                token_embeddings = self.tok_embeddings(binary_vec)
             
-            # bs = token_embeddings.shape[0]
-            # mask = self.causal_mask[:bs, None, input_pos]
-            # h = self.tok_dropout(token_embeddings)
-            # self.freqs_cis = self.freqs_cis
+            bs = token_embeddings.shape[0]
+            mask = self.causal_mask[:bs, None, input_pos]
+            h = self.tok_dropout(token_embeddings)
+            self.freqs_cis = self.freqs_cis
         
         if self.training:
             freqs_cis = self.freqs_cis[:token_embeddings.shape[1]]
