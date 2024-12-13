@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 from tqdm.auto import trange
 
 
@@ -12,7 +13,7 @@ def prefill(model, cond_idx: torch.Tensor, input_pos: torch.Tensor, cfg_scale: f
         logits, _ = model(None, cond_idx, input_pos)
         # print('prefill, logits', logits.shape, logits[0, 0, :4])
 
-    return torch.bernoulli(logits)
+    return torch.bernoulli(F.sigmoid(logits))
     # return sample(logits, **sampling_kwargs)[0]
 
 
@@ -30,7 +31,7 @@ def decode_one_token(model, x: torch.Tensor, input_pos: torch.Tensor, cfg_scale:
     else:
         logits, _ = model(x, cond_idx=None, input_pos=input_pos)
     # return sample(logits, **sampling_kwargs)
-    return torch.bernoulli(logits), logits
+    return torch.bernoulli(F.sigmoid(logits)), F.sigmoid(logits)
 
 
 def decode_n_tokens(
@@ -96,11 +97,11 @@ def generate(model, cond, max_new_tokens, emb_masks=None, cfg_scale=1.0, cfg_int
     
     # create an empty tensor of the expected final shape and fill in the current tokens
     seq = torch.empty((max_batch_size, T_new, 48), dtype=torch.float32, device=device)
-    print(seq.shape)
+    # print(seq.shape)
 
     input_pos = torch.arange(0, T, device=device)
     next_token = prefill(model, cond_combined, input_pos, cfg_scale, **sampling_kwargs)
-    print(next_token, seq[:, T:T+1].shape)
+    # print(next_token, seq[:, T:T+1].shape)
     seq[:, T:T+1] = next_token
     # print(seq.shape)
 

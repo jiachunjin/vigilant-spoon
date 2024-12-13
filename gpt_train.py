@@ -12,7 +12,7 @@ from utils.data_utils import get_dataloader
 
 def get_models():
     gpt = Transformer(ModelArgs(n_layer=12, n_head=12, dim=768, class_dropout_prob=0.0)) # 111M
-
+    # gpt = Transformer(ModelArgs(n_layer=24, n_head=16, dim=1024, class_dropout_prob=0.0))
     config = OmegaConf.create({
         'codebook_dim': 48,
         'encoder_ch_mult': [1, 1, 2, 2, 4],

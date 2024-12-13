@@ -318,7 +318,7 @@ class Transformer(nn.Module):
         h = self.norm(h)
 
         logits = self.output(h).float()
-        logits = F.sigmoid(logits)
+        # logits = F.sigmoid(logits)
         
         if self.training:
             logits = logits[:, self.cls_token_num - 1:].contiguous()
@@ -335,7 +335,8 @@ class Transformer(nn.Module):
             logits = logits[:, :-1, :]
             # print(logits.shape, targets.shape)
             # print(logits_last[0], targets[0])
-            loss = F.binary_cross_entropy(logits, targets)
+            # loss = F.binary_cross_entropy(logits, targets)
+            loss = F.binary_cross_entropy_with_logits(logits, targets)
             # print('loss', loss)
 
             # print(logits.view(-1, logits.size(-1)).shape, targets.shape)

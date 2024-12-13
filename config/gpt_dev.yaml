@@ -1,18 +1,18 @@
 train:
-  gpt_resume_path: 'experiment/gpt_dev/gpt-gpt_dev-36k'
-  global_step: 36000
+  gpt_resume_path: 'experiment/gpt_dev/gpt-gpt_dev-110k'
+  global_step: 110000
   exp_name: &exp_name 'gpt_dev'
   wandb_proj: *exp_name
   output_dir: *exp_name
   logging_dir: 'logs'
-  mixed_precision: 'no'
-  gradient_accumulation_steps: 2
-  report_to: 'wandb'
-  num_iters: 50000
+  mixed_precision: 'bf16'
+  gradient_accumulation_steps: 1
+  report_to: 'tensorboard'
+  num_iters: 180000
   val_every: 1000
   save_every: 2000
 
 data:
   # path: '/data/Largedata/ImageNet_wds/imagenet-train-{000000..001281}.tar'
-  path: '/data/Largedata/ImageNet_wds/imagenet-train-{000000..0010}.tar'
-  batch_size: 60
+  path: '/data/Largedata/ImageNet_wds/imagenet-train-000003.tar'
+  batch_size: 75
