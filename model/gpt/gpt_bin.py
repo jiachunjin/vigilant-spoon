@@ -4,8 +4,7 @@ from typing import Optional, List
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-# from utils.drop_path import DropPath
-
+from einops import rearrange, repeat
 
 def find_multiple(n: int, k: int):
     if n % k == 0:
@@ -42,7 +41,7 @@ class ModelArgs:
     max_batch_size: int = 32
     max_seq_len: int = 2048
 
-    bin_dim: int = 48
+    bin_dim_l1: int = 32 # 4x4
 
 #################################################################################
 #                      Embedding Layers for Class Labels                        #
@@ -151,7 +150,7 @@ class Attention(nn.Module):
         self.resid_dropout = nn.Dropout(config.resid_dropout_p)
 
     def forward(
-        self, x: torch.Tensor, freqs_cis: torch.Tensor = None, 
+        self, x: torch.Tensor, 
         input_pos: Optional[torch.Tensor] = None, 
         mask: Optional[torch.Tensor] = None
     ):
@@ -163,8 +162,8 @@ class Attention(nn.Module):
         xk = xk.view(bsz, seqlen, self.n_kv_head, self.head_dim)
         xv = xv.view(bsz, seqlen, self.n_kv_head, self.head_dim)
         
-        xq = apply_rotary_emb(xq, freqs_cis)
-        xk = apply_rotary_emb(xk, freqs_cis)
+        # xq = apply_rotary_emb(xq, freqs_cis)
+        # xk = apply_rotary_emb(xk, freqs_cis)
 
         xq, xk, xv = map(lambda x: x.transpose(1, 2), (xq, xk, xv))
 
@@ -198,34 +197,35 @@ class TransformerBlock(nn.Module):
         self.drop_path = nn.Identity()
 
     def forward(
-        self, x: torch.Tensor, freqs_cis: torch.Tensor, start_pos: int, mask: Optional[torch.Tensor] = None):
-        h = x + self.drop_path(self.attention(self.attention_norm(x), freqs_cis, start_pos, mask))
+        self, x: torch.Tensor, start_pos: int, mask: Optional[torch.Tensor] = None):
+        h = x + self.drop_path(self.attention(x=self.attention_norm(x), input_pos=start_pos, mask=mask))
         out = h + self.drop_path(self.feed_forward(self.ffn_norm(h)))
         return out
 
 
-class Transformer(nn.Module):
+class Transformer_bin(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config
-        self.vocab_size = config.vocab_size
         self.n_layer = config.n_layer
         self.block_size = config.block_size
         self.num_classes = config.num_classes
         self.model_type = config.model_type
         self.cls_token_num = config.cls_token_num
-        if self.model_type == 'c2i':
-            self.cls_embedding = LabelEmbedder(config.num_classes, config.dim, config.class_dropout_prob)
-        elif self.model_type == 't2i':
-            raise NotImplementedError
-            # self.cls_embedding = CaptionEmbedder(config.caption_dim, config.dim, config.class_dropout_prob)
-        else:
-            raise Exception("please check model type")
-        # self.tok_embeddings = nn.Embedding(config.vocab_size, config.dim)
-        self.tok_embeddings = nn.Linear(config.bin_dim, config.dim)
+        self.cls_embedding = LabelEmbedder(config.num_classes, config.dim, config.class_dropout_prob)
+
+        self.pos_embedding = nn.Parameter(torch.randn(256*8, config.dim))
+        self.tok_eb_level_1 = nn.Linear(2 * 1, config.dim) # 4x4, 2 bits
+        self.tok_eb_level_2 = nn.Linear(2 * 1, config.dim) # 8x8, 4 bits
+        self.tok_eb_level_3 = nn.Linear(4 * 1, config.dim) # 16x16, 8 bits
+        self.tok_eb_level_4 = nn.Linear(8 * 1, config.dim) # 32x32, 16 bits
+        # self.tok_eb_level_5 = nn.Linear(8 * 4, config.dim) # 64x64, 24 bits
+        # self.tok_eb_level_6 = nn.Linear(8 * 4, config.dim) # 128x128, 32 bits
+        # self.tok_eb_level_7 = nn.Linear(32 * 4, config.dim) # 256x256, 64 bits
+        self.unit_size = 256
+
         self.tok_dropout = nn.Dropout(config.token_dropout_p)
 
-        # transformer blocks
         dpr = [x.item() for x in torch.linspace(0, config.drop_path_rate, config.n_layer)]
         self.layers = torch.nn.ModuleList()
         for layer_id in range(config.n_layer):
@@ -233,174 +233,122 @@ class Transformer(nn.Module):
 
         # output layer
         self.norm = RMSNorm(config.dim, eps=config.norm_eps)
-        self.output = nn.Linear(config.dim, config.bin_dim, bias=False)
-
-        # 2d rotary pos embedding
-        grid_size = int(self.block_size ** 0.5)
-        assert grid_size * grid_size == self.block_size
-        self.freqs_cis = precompute_freqs_cis_2d(grid_size, self.config.dim // self.config.n_head, self.config.rope_base, self.cls_token_num)
-        
-        # KVCache
-        self.max_batch_size = -1
-        self.max_seq_length = -1
-
-        self.initialize_weights()
-
-    def initialize_weights(self):        
-        # Initialize nn.Linear and nn.Embedding
-        self.apply(self._init_weights)
-
-        # Zero-out output layers:
-        nn.init.constant_(self.output.weight, 0)
-
-    def _init_weights(self, module):
-        std = self.config.initializer_range
-        if isinstance(module, nn.Linear):
-            module.weight.data.normal_(mean=0.0, std=std)
-            if module.bias is not None:
-                module.bias.data.zero_()
-        elif isinstance(module, nn.Embedding):
-            module.weight.data.normal_(mean=0.0, std=std)
-
-    def setup_caches(self, max_batch_size, max_seq_length, dtype):
-        # if self.max_seq_length >= max_seq_length and self.max_batch_size >= max_batch_size:
-        #     return
-        head_dim = self.config.dim // self.config.n_head
-        max_seq_length = find_multiple(max_seq_length, 8)
-        self.max_seq_length = max_seq_length
-        self.max_batch_size = max_batch_size
-        for b in self.layers:
-            b.attention.kv_cache = KVCache(max_batch_size, max_seq_length, self.config.n_head, head_dim, dtype)
-
-        causal_mask = torch.tril(torch.ones(self.max_seq_length, self.max_seq_length, dtype=torch.bool))
-        self.causal_mask = causal_mask.unsqueeze(0).repeat(self.max_batch_size, 1, 1)
-        grid_size = int(self.config.block_size ** 0.5)
-        assert grid_size * grid_size == self.block_size
-        self.freqs_cis = precompute_freqs_cis_2d(grid_size, self.config.dim // self.config.n_head, self.config.rope_base, self.cls_token_num)
+        self.output_level_1 = nn.Linear(config.dim, 2 * 1, bias=False)
+        self.output_level_2 = nn.Linear(config.dim, 2 * 1, bias=False)
+        self.output_level_3 = nn.Linear(config.dim, 4 * 1, bias=False)
+        self.output_level_4 = nn.Linear(config.dim, 8 * 1, bias=False)
+        # self.output_level_5 = nn.Linear(config.dim, 8 * 4, bias=False)
+        # self.output_level_6 = nn.Linear(config.dim, 8 * 4, bias=False)
+        # self.output_level_7 = nn.Linear(config.dim, 32 * 4, bias=False)
 
     def forward(
         self, 
-        binary_vec: torch.Tensor, 
+        binary_vec,
         cond_idx: torch.Tensor,  # cond_idx_or_embed
-        input_pos:  Optional[torch.Tensor] = None, 
+        input_pos: Optional[torch.Tensor] = None, 
         targets: Optional[torch.Tensor] = None,
         mask: Optional[torch.Tensor] = None,
         valid: Optional[torch.Tensor] = None,
     ):
         if binary_vec is not None and cond_idx is not None: # training or naive inference
             cond_embeddings = self.cls_embedding(cond_idx, train=self.training)[:,:self.cls_token_num]
-            token_embeddings = self.tok_embeddings(binary_vec)
+            cond_embeddings = repeat(cond_embeddings, 'b 1 d -> b k d', k=self.unit_size)
+            self.cls_token_num = self.unit_size
+            token_embeddings = torch.cat([self.tok_eb_level_1(binary_vec[0]),
+                                          self.tok_eb_level_2(binary_vec[1]),
+                                          self.tok_eb_level_3(binary_vec[2]),
+                                          self.tok_eb_level_4(binary_vec[3]),
+                                        #   self.tok_eb_level_5(binary_vec[4]),
+                                        #   self.tok_eb_level_6(binary_vec[5]),
+                                        #   self.tok_eb_level_7(binary_vec[6]),
+                                          ], dim=1)
 
             token_embeddings = torch.cat((cond_embeddings, token_embeddings), dim=1)
             h = self.tok_dropout(token_embeddings)
-            self.freqs_cis = self.freqs_cis.to(h.device)
         else:
-            # raise NotImplementedError("Not implemented yet")
-            if cond_idx is not None: # prefill in inference
-                token_embeddings = self.cls_embedding(cond_idx, train=self.training)[:,:self.cls_token_num]
-            else: # decode_n_tokens(kv cache) in inference
-                token_embeddings = self.tok_embeddings(binary_vec)
-            
-            bs = token_embeddings.shape[0]
-            mask = self.causal_mask[:bs, None, input_pos]
-            h = self.tok_dropout(token_embeddings)
-            self.freqs_cis = self.freqs_cis
+            raise NotImplementedError("Not implemented yet")
         
-        if self.training:
-            freqs_cis = self.freqs_cis[:token_embeddings.shape[1]]
-        else:
-            freqs_cis = self.freqs_cis[input_pos]
-        # transformer blocks
+        h += self.pos_embedding[:h.shape[1]]
+
         for layer in self.layers:
-            h = layer(h, freqs_cis, input_pos, mask)
+            h = layer(h, mask)
         
         # output layers
         h = self.norm(h)
-
-        logits = self.output(h).float()
-        # logits = F.sigmoid(logits)
         
-        if self.training:
-            logits = logits[:, self.cls_token_num - 1:].contiguous()
-            # print(f'logits: {logits.shape}')
+        logits_1 = self.output_level_1(h[:, :self.unit_size, :]).float()
+        logits_2 = self.output_level_2(h[:, self.unit_size:2*self.unit_size, :]).float()
+        logits_3 = self.output_level_3(h[:, 2*self.unit_size:3*self.unit_size, :]).float()
+        logits_4 = self.output_level_4(h[:, 3*self.unit_size:4*self.unit_size, :]).float()
+        logits_5 = 0
+        logits_6 = 0
+        logits_7 = 0
+        # logits_5 = self.output_level_5(h[:, 4*self.unit_size:5*self.unit_size, :]).float()
+        # logits_6 = self.output_level_6(h[:, 5*self.unit_size:6*self.unit_size, :]).float()
+        # logits_7 = self.output_level_7(h[:, 6*self.unit_size:7*self.unit_size, :]).float()
+        # print(logits_1.shape, logits_2.shape, logits_3.shape)
+        logits = [logits_1, logits_2, logits_3, logits_4, logits_5, logits_6, logits_7]
 
-        # if we are given some desired targets also calculate the loss
+        # if self.training:
+        #     logits = logits[:, 0:].contiguous()
+        
         loss = None
+        losses = None
         if valid is not None:
             raise NotImplementedError("Not implemented yet")
-            # loss_all = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), reduction='none')
-            # valid_all = valid[:,None].repeat(1, targets.shape[1]).view(-1)
-            # loss = (loss_all * valid_all).sum() / max(valid_all.sum(), 1)
         elif targets is not None:
-            logits = logits[:, :-1, :]
+            # logits = logits[:, :-16, :]
             # print(logits.shape, targets.shape)
-            # print(logits_last[0], targets[0])
-            # loss = F.binary_cross_entropy(logits, targets)
-            loss = F.binary_cross_entropy_with_logits(logits, targets)
+            loss1 = F.binary_cross_entropy_with_logits(logits_1, targets[0])
+            loss2 = F.binary_cross_entropy_with_logits(logits_2, targets[1])
+            loss3 = F.binary_cross_entropy_with_logits(logits_3, targets[2])
+            loss4 = F.binary_cross_entropy_with_logits(logits_4, targets[3])
+            loss5 = torch.tensor(0)
+            loss6 = torch.tensor(0)
+            loss7 = torch.tensor(0)
+            # loss5 = F.binary_cross_entropy_with_logits(logits_5, targets[4])
+            # loss6 = F.binary_cross_entropy_with_logits(logits_6, targets[5])
+            # loss7 = F.binary_cross_entropy_with_logits(logits_7, targets[6])
+
+            losses = [loss1, loss2, loss3, loss4, loss5, loss6, loss7]
+
+            # loss = (loss1 + loss2 + loss3 + loss4 + loss5 + loss6 + loss7) / 7
+            loss = (loss1 + loss2 + loss3 + loss4) / 4
+
+            # loss = (
+            #     F.binary_cross_entropy_with_logits(logits_1, targets[0]) + 
+            #     F.binary_cross_entropy_with_logits(logits_2, targets[1]) +
+            #     F.binary_cross_entropy_with_logits(logits_3, targets[2]) +
+            #     F.binary_cross_entropy_with_logits(logits_4, targets[3]) +
+            #     F.binary_cross_entropy_with_logits(logits_5, targets[4]) +
+            #     F.binary_cross_entropy_with_logits(logits_6, targets[5]) + 
+            #     F.binary_cross_entropy_with_logits(logits_7, targets[6])
+            # ) / 7
             # print('loss', loss)
 
-            # print(logits.view(-1, logits.size(-1)).shape, targets.shape)
-            # loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))
-
-        return logits, loss
+        return logits, loss, losses
+        
 
 
-    def get_fsdp_wrap_module_list(self) -> List[nn.Module]:
-        return list(self.layers)
-
-
-
-#################################################################################
-#                      Rotary Positional Embedding Functions                    #
-#################################################################################
-# https://github.com/pytorch-labs/gpt-fast/blob/main/model.py 
-def precompute_freqs_cis(seq_len: int, n_elem: int, base: int = 10000, cls_token_num=120):
-    freqs = 1.0 / (base ** (torch.arange(0, n_elem, 2)[: (n_elem // 2)].float() / n_elem))
-    t = torch.arange(seq_len, device=freqs.device)
-    freqs = torch.outer(t, freqs) # (seq_len, head_dim // 2)
-    freqs_cis = torch.polar(torch.ones_like(freqs), freqs)
-    cache = torch.stack([freqs_cis.real, freqs_cis.imag], dim=-1) # (cls_token_num+seq_len, head_dim // 2, 2)
-    cond_cache = torch.cat([torch.zeros(cls_token_num, n_elem // 2, 2), cache]) # (cls_token_num+seq_len, head_dim // 2, 2)
-    return cond_cache 
-
-
-def precompute_freqs_cis_2d(grid_size: int, n_elem: int, base: int = 10000, cls_token_num=120):
-    # split the dimension into half, one for x and one for y
-    half_dim = n_elem // 2
-    freqs = 1.0 / (base ** (torch.arange(0, half_dim, 2)[: (half_dim // 2)].float() / half_dim))
-    t = torch.arange(grid_size, device=freqs.device)
-    freqs = torch.outer(t, freqs) # (grid_size, head_dim // 2)
-    freqs_grid = torch.concat([
-        freqs[:, None, :].expand(-1, grid_size, -1),
-        freqs[None, :, :].expand(grid_size, -1, -1),
-    ], dim=-1)  # (grid_size, grid_size, head_dim // 2)
-    cache_grid = torch.stack([torch.cos(freqs_grid), torch.sin(freqs_grid)], dim=-1) # (grid_size, grid_size, head_dim // 2, 2)
-    cache = cache_grid.flatten(0, 1)
-    cond_cache = torch.cat([torch.zeros(cls_token_num, n_elem // 2, 2), cache]) # (cls_token_num+grid_size**2, head_dim // 2, 2)
-    return cond_cache
-
-
-def apply_rotary_emb(x: torch.Tensor, freqs_cis: torch.Tensor):
-    # x: (bs, seq_len, n_head, head_dim)
-    # freqs_cis (seq_len, head_dim // 2, 2)
-    xshaped = x.float().reshape(*x.shape[:-1], -1, 2) # (bs, seq_len, n_head, head_dim//2, 2)
-    freqs_cis = freqs_cis.view(1, xshaped.size(1), 1, xshaped.size(3), 2) # (1, seq_len, 1, head_dim//2, 2)
-    x_out2 = torch.stack([
-            xshaped[..., 0] * freqs_cis[..., 0] - xshaped[..., 1] * freqs_cis[..., 1],
-            xshaped[..., 1] * freqs_cis[..., 0] + xshaped[..., 0] * freqs_cis[..., 1],
-    ], dim=-1)
-    x_out2 = x_out2.flatten(3)
-    return x_out2.type_as(x)
 
 
 if __name__ == '__main__':
-    gpt = Transformer(ModelArgs(n_layer=12, n_head=12, dim=768, class_dropout_prob=0.0)) # 111M
-    print(sum(p.numel() for p in gpt.parameters()))
+    gpt = Transformer_bin(ModelArgs(n_layer=12, n_head=12, dim=768, class_dropout_prob=0.0))
 
-    b = 3
-    c_indices = torch.randint(0, 1000, (b,), dtype=torch.int64)
-    x = torch.randint(0, 2, (b, 7, 48), dtype=torch.float32)
-    h = torch.nn.functional.sigmoid(torch.randn((b, 7, 48), dtype=torch.float32))
+    binary_vec = torch.randint(0, 2, (2, 16, 2), dtype=torch.float32)
+    cond_idx = torch.randint(0, 1000, (2,)).long()
 
-    logits, loss = gpt(binary_vec=x, cond_idx=c_indices, targets=h)
-    print(logits.shape, loss)
+    seq_len = 32
+    block_size = 16
+    num_blocks = seq_len // block_size
+    # 构造因果 block mask
+    block_mask = torch.tril(torch.ones(num_blocks, num_blocks))  # 下三角矩阵表示因果关系
+    block_mask = block_mask.repeat_interleave(block_size, dim=0).repeat_interleave(block_size, dim=1)
+    # 转换为布尔类型（True 表示遮挡）
+    causal_block_mask = block_mask != 0  # (seq_len, seq_len)
+    # 扩展维度以适配 scaled_dot_product_attention
+    causal_block_mask = causal_block_mask.unsqueeze(0).unsqueeze(0)  # (1, 1, seq_len, seq_len)
+
+
+    targets = torch.rand((2, 16, 2), dtype=torch.float32)
+    out = gpt(binary_vec, cond_idx, mask=causal_block_mask, targets=targets)
