@@ -214,15 +214,15 @@ class Transformer_bin(nn.Module):
         self.cls_token_num = config.cls_token_num
         self.cls_embedding = LabelEmbedder(config.num_classes, config.dim, config.class_dropout_prob)
 
-        self.pos_embedding = nn.Parameter(torch.randn(256*8, config.dim))
-        self.tok_eb_level_1 = nn.Linear(2 * 1, config.dim) # 4x4, 2 bits
-        self.tok_eb_level_2 = nn.Linear(2 * 1, config.dim) # 8x8, 4 bits
-        self.tok_eb_level_3 = nn.Linear(4 * 1, config.dim) # 16x16, 8 bits
-        self.tok_eb_level_4 = nn.Linear(8 * 1, config.dim) # 32x32, 16 bits
+        self.pos_embedding = nn.Parameter(torch.randn(65, config.dim))
+        self.tok_eb = nn.Linear(256, config.dim) # 4x4, 2 bits
+        # self.tok_eb_level_2 = nn.Linear(2 * 1, config.dim) # 8x8, 4 bits
+        # self.tok_eb_level_3 = nn.Linear(4 * 1, config.dim) # 16x16, 8 bits
+        # self.tok_eb_level_4 = nn.Linear(8 * 1, config.dim) # 32x32, 16 bits
         # self.tok_eb_level_5 = nn.Linear(8 * 4, config.dim) # 64x64, 24 bits
         # self.tok_eb_level_6 = nn.Linear(8 * 4, config.dim) # 128x128, 32 bits
         # self.tok_eb_level_7 = nn.Linear(32 * 4, config.dim) # 256x256, 64 bits
-        self.unit_size = 256
+        self.unit_size = 1
 
         self.tok_dropout = nn.Dropout(config.token_dropout_p)
 
@@ -233,10 +233,10 @@ class Transformer_bin(nn.Module):
 
         # output layer
         self.norm = RMSNorm(config.dim, eps=config.norm_eps)
-        self.output_level_1 = nn.Linear(config.dim, 2 * 1, bias=False)
-        self.output_level_2 = nn.Linear(config.dim, 2 * 1, bias=False)
-        self.output_level_3 = nn.Linear(config.dim, 4 * 1, bias=False)
-        self.output_level_4 = nn.Linear(config.dim, 8 * 1, bias=False)
+        self.output = nn.Linear(config.dim, 256, bias=False)
+        # self.output_level_2 = nn.Linear(config.dim, 2 * 1, bias=False)
+        # self.output_level_3 = nn.Linear(config.dim, 4 * 1, bias=False)
+        # self.output_level_4 = nn.Linear(config.dim, 8 * 1, bias=False)
         # self.output_level_5 = nn.Linear(config.dim, 8 * 4, bias=False)
         # self.output_level_6 = nn.Linear(config.dim, 8 * 4, bias=False)
         # self.output_level_7 = nn.Linear(config.dim, 32 * 4, bias=False)
@@ -254,14 +254,15 @@ class Transformer_bin(nn.Module):
             cond_embeddings = self.cls_embedding(cond_idx, train=self.training)[:,:self.cls_token_num]
             cond_embeddings = repeat(cond_embeddings, 'b 1 d -> b k d', k=self.unit_size)
             self.cls_token_num = self.unit_size
-            token_embeddings = torch.cat([self.tok_eb_level_1(binary_vec[0]),
-                                          self.tok_eb_level_2(binary_vec[1]),
-                                          self.tok_eb_level_3(binary_vec[2]),
-                                          self.tok_eb_level_4(binary_vec[3]),
-                                        #   self.tok_eb_level_5(binary_vec[4]),
-                                        #   self.tok_eb_level_6(binary_vec[5]),
-                                        #   self.tok_eb_level_7(binary_vec[6]),
-                                          ], dim=1)
+            token_embeddings = self.tok_eb(binary_vec)
+            # token_embeddings = torch.cat([self.tok_eb_level_1(binary_vec[0]),
+            #                               self.tok_eb_level_2(binary_vec[1]),
+            #                               self.tok_eb_level_3(binary_vec[2]),
+            #                               self.tok_eb_level_4(binary_vec[3]),
+            #                             #   self.tok_eb_level_5(binary_vec[4]),
+            #                             #   self.tok_eb_level_6(binary_vec[5]),
+            #                             #   self.tok_eb_level_7(binary_vec[6]),
+            #                               ], dim=1)
 
             token_embeddings = torch.cat((cond_embeddings, token_embeddings), dim=1)
             h = self.tok_dropout(token_embeddings)
@@ -276,19 +277,7 @@ class Transformer_bin(nn.Module):
         # output layers
         h = self.norm(h)
         
-        logits_1 = self.output_level_1(h[:, :self.unit_size, :]).float()
-        logits_2 = self.output_level_2(h[:, self.unit_size:2*self.unit_size, :]).float()
-        logits_3 = self.output_level_3(h[:, 2*self.unit_size:3*self.unit_size, :]).float()
-        logits_4 = self.output_level_4(h[:, 3*self.unit_size:4*self.unit_size, :]).float()
-        logits_5 = 0
-        logits_6 = 0
-        logits_7 = 0
-        # logits_5 = self.output_level_5(h[:, 4*self.unit_size:5*self.unit_size, :]).float()
-        # logits_6 = self.output_level_6(h[:, 5*self.unit_size:6*self.unit_size, :]).float()
-        # logits_7 = self.output_level_7(h[:, 6*self.unit_size:7*self.unit_size, :]).float()
-        # print(logits_1.shape, logits_2.shape, logits_3.shape)
-        logits = [logits_1, logits_2, logits_3, logits_4, logits_5, logits_6, logits_7]
-
+        logits = self.output(h[:, :-1, :]).float()
         # if self.training:
         #     logits = logits[:, 0:].contiguous()
         
@@ -299,21 +288,22 @@ class Transformer_bin(nn.Module):
         elif targets is not None:
             # logits = logits[:, :-16, :]
             # print(logits.shape, targets.shape)
-            loss1 = F.binary_cross_entropy_with_logits(logits_1, targets[0])
-            loss2 = F.binary_cross_entropy_with_logits(logits_2, targets[1])
-            loss3 = F.binary_cross_entropy_with_logits(logits_3, targets[2])
-            loss4 = F.binary_cross_entropy_with_logits(logits_4, targets[3])
-            loss5 = torch.tensor(0)
-            loss6 = torch.tensor(0)
-            loss7 = torch.tensor(0)
+            loss = F.binary_cross_entropy_with_logits(logits, targets)
+            # loss1 = F.binary_cross_entropy_with_logits(logits_1, targets[0])
+            # loss2 = F.binary_cross_entropy_with_logits(logits_2, targets[1])
+            # loss3 = F.binary_cross_entropy_with_logits(logits_3, targets[2])
+            # loss4 = F.binary_cross_entropy_with_logits(logits_4, targets[3])
+            # loss5 = torch.tensor(0)
+            # loss6 = torch.tensor(0)
+            # loss7 = torch.tensor(0)
             # loss5 = F.binary_cross_entropy_with_logits(logits_5, targets[4])
             # loss6 = F.binary_cross_entropy_with_logits(logits_6, targets[5])
             # loss7 = F.binary_cross_entropy_with_logits(logits_7, targets[6])
 
-            losses = [loss1, loss2, loss3, loss4, loss5, loss6, loss7]
+            # losses = [loss1, loss2, loss3, loss4, loss5, loss6, loss7]
 
             # loss = (loss1 + loss2 + loss3 + loss4 + loss5 + loss6 + loss7) / 7
-            loss = (loss1 + loss2 + loss3 + loss4) / 4
+            # loss = (loss1 + loss2 + loss3 + loss4) / 4
 
             # loss = (
             #     F.binary_cross_entropy_with_logits(logits_1, targets[0]) + 
@@ -326,7 +316,7 @@ class Transformer_bin(nn.Module):
             # ) / 7
             # print('loss', loss)
 
-        return logits, loss, losses
+        return logits, loss
         
 
 

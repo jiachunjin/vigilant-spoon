@@ -90,71 +90,20 @@ def main():
         desc="Steps",
         disable=not accelerator.is_local_main_process,
     )
-
+    from utils.misc import get_causal_block_mask
     while not training_done:
         for x, y in dataloader:
             gpt.train()
             with accelerator.accumulate([gpt]):
                 with torch.no_grad():
-                    sample, h = bae.encode_for_gpt(x)
-                    # sample_1 = rearrange(sample[:, :, :2], 'b (h w) d -> b h w d', h=16)
-                    # h_1 = rearrange(h[:, :, :2], 'b (h w) d -> b h w d', h=16)
-                    # sample_2 = rearrange(sample[:, :, 2:4], 'b (h w) d -> b h w d', h=16)
-                    # h_2 = rearrange(h[:, :, 2:4], 'b (h w) d -> b h w d', h=16)
-                    # sample_3 = rearrange(sample[:, :, 4:8], 'b (h w) d -> b h w d', h=16)
-                    # h_3 = rearrange(h[:, :, 4:8], 'b (h w) d -> b h w d', h=16)
-
-                    # sample_1 = rearrange(sample_1, 'b (h1 h2) (w1 w2) d -> b (h1 w1) (h2 w2 d)', h1=4, w1=4)
-                    # h_1 = rearrange(h_1, 'b (h1 h2) (w1 w2) d -> b (h1 w1) (h2 w2 d)', h1=4, w1=4)
-                    # sample_2 = rearrange(sample_2, 'b (h1 h2) (w1 w2) d -> b (h1 w1) (h2 w2 d)', h1=4, w1=4)
-                    # h_2 = rearrange(h_2, 'b (h1 h2) (w1 w2) d -> b (h1 w1) (h2 w2 d)', h1=4, w1=4)
-                    # sample_3 = rearrange(sample_3, 'b (h1 h2) (w1 w2) d -> b (h1 w1) (h2 w2 d)', h1=4, w1=4)
-                    # h_3 = rearrange(h_3, 'b (h1 h2) (w1 w2) d -> b (h1 w1) (h2 w2 d)', h1=4, w1=4)
-
-                    # sample = sample_1
-                    # h = h_1
-                    # sample = torch.cat([sample_1, sample_2], dim=1)
-                    # h = torch.cat([h_1, h_2], dim=1)
-                    # print(sample_1.shape, sample_2.shape, sample_3.shape)
-                    # print(h_1.shape, h_2.shape, h_3.shape)
-                    h1 = 16
-                    w1 = 16
-                    h2 = 1
-                    w2 = 1
-                    sample_1 = rearrange(sample[:, :, :2], 'b (h1 w1 h2 w2) d -> b (h1 w1) (h2 w2 d)', h1=h1, h2=h2, w1=w1, w2=w2)
-                    h_1 = rearrange(h[:, :, :2], 'b (h1 w1 h2 w2) d -> b (h1 w1) (h2 w2 d)', h1=h1, h2=h2, w1=w1, w2=w2)
-                    sample_2 = rearrange(sample[:, :, 2:4], 'b (h1 w1 h2 w2) d -> b (h1 w1) (h2 w2 d)', h1=h1, h2=h2, w1=w1, w2=w2)
-                    h_2 = rearrange(h[:, :, 2:4], 'b (h1 w1 h2 w2) d -> b (h1 w1) (h2 w2 d)', h1=h1, h2=h2, w1=w1, w2=w2)
-                    sample_3 = rearrange(sample[:, :, 4:8], 'b (h1 w1 h2 w2) d -> b (h1 w1) (h2 w2 d)', h1=h1, h2=h2, w1=w1, w2=w2)
-                    h_3 = rearrange(h[:, :, 4:8], 'b (h1 w1 h2 w2) d -> b (h1 w1) (h2 w2 d)', h1=h1, h2=h2, w1=w1, w2=w2)
-                    sample_4 = rearrange(sample[:, :, 8:16], 'b (h1 w1 h2 w2) d -> b (h1 w1) (h2 w2 d)', h1=h1, h2=h2, w1=w1, w2=w2)
-                    h_4 = rearrange(h[:, :, 8:16], 'b (h1 w1 h2 w2) d -> b (h1 w1) (h2 w2 d)', h1=h1, h2=h2, w1=w1, w2=w2)
-                    sample_5 = rearrange(sample[:, :, 16:24], 'b (h1 w1 h2 w2) d -> b (h1 w1) (h2 w2 d)', h1=h1, h2=h2, w1=w1, w2=w2)
-                    h_5 = rearrange(h[:, :, 16:24], 'b (h1 w1 h2 w2) d -> b (h1 w1) (h2 w2 d)', h1=h1, h2=h2, w1=w1, w2=w2)
-                    sample_6 = rearrange(sample[:, :, 24:32], 'b (h1 w1 h2 w2) d -> b (h1 w1) (h2 w2 d)', h1=h1, h2=h2, w1=w1, w2=w2)
-                    h_6 = rearrange(h[:, :, 24:32], 'b (h1 w1 h2 w2) d -> b (h1 w1) (h2 w2 d)', h1=h1, h2=h2, w1=w1, w2=w2)
-                    sample_7 = rearrange(sample[:, :, 32:], 'b (h1 w1 h2 w2) d -> b (h1 w1) (h2 w2 d)', h1=h1, h2=h2, w1=w1, w2=w2)
-                    h_7 = rearrange(h[:, :, 32:], 'b (h1 w1 h2 w2) d -> b (h1 w1) (h2 w2 d)', h1=h1, h2=h2, w1=w1, w2=w2)
-
-                    sample = [sample_1, sample_2, sample_3, sample_4, sample_5, sample_6, sample_7]
-                    h = [h_1, h_2, h_3, h_4, h_5, h_6, h_7]
-                    # sample = torch.cat([sample_1, sample_2, sample_3], dim=1)
-                    # h = torch.cat([h_1, h_2, h_3], dim=1)
-
-                    seq_len = 256 * 8
-                    block_size = 256
-                    num_blocks = seq_len // block_size
-                    # 构造因果 block mask
-                    block_mask = torch.tril(torch.ones(num_blocks, num_blocks))  # 下三角矩阵表示因果关系
-                    block_mask = block_mask.repeat_interleave(block_size, dim=0).repeat_interleave(block_size, dim=1)
-                    # 转换为布尔类型（True 表示遮挡）
-                    causal_block_mask = block_mask != 0  # (seq_len, seq_len)t_product_attention
-                    causal_block_mask = causal_block_mask.unsqueeze(0).unsqueeze(0)  # (1, 1, seq_len, seq_len)
-
+                    sample, h = bae.encode_for_gpt(x) # (b, 256, 64)
+                    sample = rearrange(sample, 'b (m n) d -> b (m d) n', m=1, n=256)
+                    h = rearrange(h, 'b (m n) d -> b (m d) n', m=1, n=256)
+                    causal_block_mask = get_causal_block_mask(seq_len=64 + 1, block_size=1)
                 cond_idx = y.long()
                 # targets = h[:, target_id, :]
 
-                _, loss, losses = gpt(binary_vec=sample, cond_idx=cond_idx, targets=h, mask=causal_block_mask)
+                _, loss = gpt(binary_vec=sample, cond_idx=cond_idx, targets=h, mask=causal_block_mask)
 
                 optimizer.zero_grad()
                 if accelerator.sync_gradients:
@@ -167,16 +116,16 @@ def main():
                 global_step += 1
                 progress_bar.update(1)
                 loss = accelerator.gather(loss.detach()).mean().item()
-                loss1 = accelerator.gather(losses[0].detach()).mean().item()
-                loss2 = accelerator.gather(losses[1].detach()).mean().item()
-                loss3 = accelerator.gather(losses[2].detach()).mean().item()
-                loss4 = accelerator.gather(losses[3].detach()).mean().item()
-                # loss5 = accelerator.gather(losses[4].detach()).mean().item()
+                # loss1 = accelerator.gather(losses[0].detach()).mean().item()
+                # loss2 = accelerator.gather(losses[1].detach()).mean().item()
+                # loss3 = accelerator.gather(losses[2].detach()).mean().item()
+                # loss4 = accelerator.gather(losses[3].detach()).mean().item()
+                # # loss5 = accelerator.gather(losses[4].detach()).mean().item()
                 # loss6 = accelerator.gather(losses[5].detach()).mean().item()
                 # loss7 = accelerator.gather(losses[6].detach()).mean().item()
 
 
-                logs = {'loss': loss, 'loss1': loss1, 'loss2': loss2, 'loss3': loss3, 'loss4': loss4}
+                logs = {'loss': loss}
                 accelerator.log(logs, step=global_step)
                 progress_bar.set_postfix(**logs)
 

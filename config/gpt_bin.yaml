@@ -9,11 +9,11 @@ train:
   mixed_precision: 'bf16'
   gradient_accumulation_steps: 1
   report_to: 'wandb'
-  num_iters: 30000
+  num_iters: 50000
   val_every: 1000
   save_every: 1000
 
 data:
   # path: '/data/Largedata/ImageNet_wds/imagenet-train-{000000..001281}.tar'
   path: '/data/Largedata/ImageNet_wds/imagenet-train-000004.tar'
-  batch_size: 20
+  batch_size: 100
