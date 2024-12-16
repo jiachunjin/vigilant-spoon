@@ -10,19 +10,19 @@ model:
   
 
 train:
-  ae_resume_path: 'experiment/matryoshka_64_newdec/vqvae-matryoshka_64_newdec-50k'
-  loss_resume_path: 'experiment/matryoshka_64_newdec/loss-matryoshka_64_newdec-50k'
-  global_step: 50000
-  exp_name: &exp_name 'matryoshka_64_newdec'
+  ae_resume_path: 'ckpts/a800/vqvae-matryoshka_64-170k'
+  loss_resume_path: 'experiment/matryoshka_64_newdec/loss-matryoshka_64_newdec-62k'
+  global_step: 1
+  exp_name: &exp_name 'matryoshka_entropy'
   wandb_proj: *exp_name
   output_dir: *exp_name
   logging_dir: 'logs'
-  mixed_precision: 'no'
+  mixed_precision: 'bf16'
   gradient_accumulation_steps: 4
   report_to: 'wandb'
-  num_iters: 80000
-  val_every: 1000
-  save_every: 2000
+  num_iters: 200000
+  val_every: 100
+  save_every: 1000
   disc_start: 1
   disc_weight: 0.05
 

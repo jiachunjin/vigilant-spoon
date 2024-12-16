@@ -13,8 +13,9 @@ from utils.misc import reconstrut_image
 
 def get_models(config):
     vqvae = VQModel(config.model)
-    ckpt = torch.load('/home/jiachun/codebase/rfsq/ckpts/vq_ds16_c2i.pt', map_location='cpu')
-    vqvae.load_state_dict(ckpt['model'], strict=False)
+    if config.train.ae_resume_path is None:
+        ckpt = torch.load('/home/jiachun/codebase/rfsq/ckpts/vq_ds16_c2i.pt', map_location='cpu')
+        vqvae.load_state_dict(ckpt['model'], strict=False)
 
     return vqvae
 
@@ -89,27 +90,34 @@ def main():
         disable=not accelerator.is_local_main_process,
     )
 
-    from loss.loss import Loss_middle
+    from loss.loss import Loss_middle, Loss_entropy, Loss_matryoshka
     Loss_intermediate = Loss_middle()
+    Loss_entropy = Loss_entropy(accelerator.device)
+    # Loss_matryoshka = Loss_matryoshka()
 
     while not training_done:
         for x, _ in dataloader:
             vqvae.train()
             with accelerator.accumulate([vqvae, loss]):
-                quant = vqvae.module.encode_binary(x)
+                quant, h = vqvae.module.encode_binary(x)
                 rec = vqvae.module.decode_fsq(quant)
                 rec_intermediate = vqvae.module.decode_intermediate(quant)
+                # rec_matryoshka = vqvae.module.decode_matryoshka(quant)
 
                 loss_gen = loss(x, rec, optimizer_idx=0, global_step=global_step+1, 
                                    last_layer=vqvae.module.decoder.last_layer)
 
                 loss_intermediate = Loss_intermediate(x, rec_intermediate)
 
+                loss_entropy = Loss_entropy(h)
+                # loss_matryoshka = Loss_matryoshka(x, rec_matryoshka)
+
                 optimizer.zero_grad()
                 if accelerator.sync_gradients:
                     accelerator.clip_grad_norm_(params_to_learn, 1.0)
                 # accelerator.backward(loss_gen)
-                accelerator.backward(loss_gen + loss_intermediate)
+                # accelerator.backward(loss_gen + loss_intermediate)
+                accelerator.backward(loss_gen + loss_intermediate - 0.25 * loss_entropy.mean())
                 optimizer.step()
 
                 loss_disc = loss(x, rec, optimizer_idx=1, global_step=global_step+1)
@@ -125,7 +133,9 @@ def main():
                 loss_gen = accelerator.gather(loss_gen.detach()).mean().item()
                 loss_disc = accelerator.gather(loss_disc.detach()).mean().item()
                 loss_intermediate = accelerator.gather(loss_intermediate.detach()).mean().item()
-                logs = {'loss_gen': loss_gen, 'loss_disc': loss_disc, 'loss_intermediate': loss_intermediate}
+                loss_entropy = accelerator.gather(loss_entropy.detach()).mean().item()
+                # loss_matryoshka = accelerator.gather(loss_matryoshka.detach()).mean().item()
+                logs = {'loss_gen': loss_gen, 'loss_disc': loss_disc, 'loss_entropy': loss_entropy, 'loss_intermediate': loss_intermediate}
                 accelerator.log(logs, step=global_step)
                 progress_bar.set_postfix(**logs)
 

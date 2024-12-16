@@ -6,6 +6,7 @@ import torch
 import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
+from torchvision import transforms
 
 from model.lpips import LPIPS
 from model.discriminator_patchgan import NLayerDiscriminator as PatchGANDiscriminator
@@ -37,7 +38,6 @@ def non_saturating_d_loss(logits_real, logits_fake):
 def hinge_gen_loss(logit_fake):
     return -torch.mean(logit_fake)
 
-
 def non_saturating_gen_loss(logit_fake):
     return torch.mean(F.binary_cross_entropy_with_logits(torch.ones_like(logit_fake),  logit_fake))
 
@@ -48,7 +48,41 @@ def adopt_weight(weight, global_step, threshold=0, value=0.):
     return weight
 
 
-from torchvision import transforms
+class Loss_entropy():
+    def __init__(self, device):
+        initial_value = 1.0
+        decay_factor = 0.8
+        num_dims = 32
+
+        factors = torch.ones(num_dims)
+        factors[1:] = decay_factor 
+
+        weight = torch.cumprod(factors, dim=0) * initial_value
+        self.weight = torch.cat([weight, torch.zeros_like(weight)], dim=0).to(device)
+
+    @staticmethod
+    def bernoulli_entropy(p):
+        return -p * torch.log(torch.clip(p, 1e-10, 1)) - (1 - p) * torch.log(torch.clip(1 - p, 1e-10, 1))
+
+    def __call__(self, bernoulli_p):
+        # bernoulli_p: (b, 16, 16, 64)
+        entropy = self.bernoulli_entropy(bernoulli_p).mean(dim=(0, 1, 2)) # (64,)
+
+        return entropy * self.weight
+
+
+class Loss_matryoshka():
+    def __init__(self):
+        pass
+
+    def __call__(self, x, rec_matryoshka):
+        loss = 0
+        for rec in rec_matryoshka:
+            loss += F.mse_loss(x, rec)
+        
+        return loss / len(rec_matryoshka)
+
+
 class Loss_middle():
     def __init__(self):
         self.inverse_transform = transforms.Compose([

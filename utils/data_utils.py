@@ -1,6 +1,4 @@
-import cv2
 import webdataset as wds
-import numpy as np
 from torchvision import transforms
 from torch.utils.data import DataLoader
 
@@ -28,6 +26,7 @@ from torch.utils.data import DataLoader
 def get_dataloader(config):
     llamagen_transform = transforms.Compose([
         transforms.Resize(256, max_size=None),
+        transforms.RandomHorizontalFlip(p=0.5),
         transforms.CenterCrop(256),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5], inplace=True)

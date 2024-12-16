@@ -40,8 +40,22 @@ class VQModel(nn.Module):
             self.decoder_16 = Decoder(ch=32, ch_mult=[2],z_channels=config.z_channels, out_channels=3)
             self.decoder_8 = Decoder(ch=32, ch_mult=[2, 2],z_channels=config.z_channels, out_channels=3, downsample=2)
             self.decoder_4 = Decoder(ch=32, ch_mult=[2, 2],z_channels=config.z_channels, out_channels=3, downsample=4)
+        else:
+            raise NotImplementedError
+            # 这里matryoshka=False的意思有歧义，但是暂时先这样
+            # self.post_quant_conv_matryoshka_32 = nn.Conv2d(32, config.z_channels, 1)
+            # self.post_quant_conv_matryoshka_16 = nn.Conv2d(16, config.z_channels, 1)
+            # self.post_quant_conv_matryoshka_8 = nn.Conv2d(8, config.z_channels, 1)
+            # self.post_quant_conv_matryoshka_4 = nn.Conv2d(4, config.z_channels, 1)
+            # self.post_quant_conv_matryoshka_2 = nn.Conv2d(2, config.z_channels, 1)
+            # self.post_quant_conv_matryoshka_1 = nn.Conv2d(1, config.z_channels, 1)
 
-        print(f'self.bernoulli: {self.bernoulli}')
+            # self.decoder_matryoshka_32 = Decoder(ch=32, ch_mult=[1, 1, 1, 1, 1],z_channels=256, out_channels=3)
+            # self.decoder_matryoshka_16 = Decoder(ch=32, ch_mult=[1, 1, 1, 1, 1],z_channels=256, out_channels=3)
+            # self.decoder_matryoshka_8 = Decoder(ch=32, ch_mult=[1, 1, 1, 1, 1],z_channels=256, out_channels=3)
+            # self.decoder_matryoshka_4 = Decoder(ch=32, ch_mult=[1, 1, 1, 1, 1],z_channels=256, out_channels=3)
+            # self.decoder_matryoshka_2 = Decoder(ch=32, ch_mult=[1, 1, 1, 1, 1],z_channels=256, out_channels=3)
+            # self.decoder_matryoshka_1 = Decoder(ch=32, ch_mult=[1, 1, 1, 1, 1],z_channels=256, out_channels=3)
 
     def encode_binary(self, x):
         h = self.encoder(x)
@@ -67,7 +81,7 @@ class VQModel(nn.Module):
         quant = h + (h_hat - h).detach()
         quant = rearrange(quant, 'b h w c -> b c h w')
 
-        return quant
+        return quant, h
 
     def decode_fsq(self, quant):
         quant = self.post_quant_conv_new(quant)
@@ -96,6 +110,29 @@ class VQModel(nn.Module):
 
         return (dec_128, dec_64, dec_32, dec_16, dec_8, dec_4)
     
+    def decode_matryoshka(self, quant):
+        raise NotImplementedError
+        assert self.matryoshka == False, "matryoshka must be false at this stage"
+        quant_32 = self.post_quant_conv_matryoshka_32(quant[:, :32, :, :])
+        dec_32 = self.decoder_matryoshka_32(quant_32)
+
+        quant_16 = self.post_quant_conv_matryoshka_16(quant[:, :16, :, :])
+        dec_16 = self.decoder_matryoshka_16(quant_16)
+
+        quant_8 = self.post_quant_conv_matryoshka_8(quant[:, :8, :, :])
+        dec_8 = self.decoder_matryoshka_8(quant_8)
+
+        quant_4 = self.post_quant_conv_matryoshka_4(quant[:, :4, :, :])
+        dec_4 = self.decoder_matryoshka_4(quant_4)
+
+        quant_2 = self.post_quant_conv_matryoshka_2(quant[:, :2, :, :])
+        dec_2 = self.decoder_matryoshka_2(quant_2)
+
+        quant_1 = self.post_quant_conv_matryoshka_1(quant[:, :1, :, :])
+        dec_1 = self.decoder_matryoshka_1(quant_1)
+
+        return (dec_32, dec_16, dec_8, dec_4, dec_2, dec_1)
+
     def get_bernoulli(self, x):
         h = self.encoder(x)
         h = self.quant_conv_new(h)
