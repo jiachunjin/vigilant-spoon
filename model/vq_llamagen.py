@@ -27,12 +27,18 @@ class VQModel(nn.Module):
 
         # used only when matryoshka
         if self.matryoshka:
-            self.post_quant_conv_new_32 = nn.Conv2d(32, config.z_channels, 1) # 128
-            self.post_quant_conv_new_24 = nn.Conv2d(24, config.z_channels, 1) # 64
-            self.post_quant_conv_new_16 = nn.Conv2d(16, config.z_channels, 1) # 32
-            self.post_quant_conv_new_8 = nn.Conv2d(8, config.z_channels, 1) # 16
-            self.post_quant_conv_new_4 = nn.Conv2d(4, config.z_channels, 1) # 8
-            self.post_quant_conv_new_2 = nn.Conv2d(2, config.z_channels, 1) # 4
+            self.post_qc_48 = nn.Conv2d(48, config.z_channels, 1) # 128
+            self.post_qc_32 = nn.Conv2d(32, config.z_channels, 1) # 64
+            self.post_qc_24 = nn.Conv2d(24, config.z_channels, 1) # 32
+            self.post_qc_16 = nn.Conv2d(16, config.z_channels, 1) # 16
+            self.post_qc_8 = nn.Conv2d(8, config.z_channels, 1) # 8
+            self.post_qc_4 = nn.Conv2d(4, config.z_channels, 1) # 4
+            # self.post_quant_conv_new_32 = nn.Conv2d(32, config.z_channels, 1) # 128
+            # self.post_quant_conv_new_24 = nn.Conv2d(24, config.z_channels, 1) # 64
+            # self.post_quant_conv_new_16 = nn.Conv2d(16, config.z_channels, 1) # 32
+            # self.post_quant_conv_new_8 = nn.Conv2d(8, config.z_channels, 1) # 16
+            # self.post_quant_conv_new_4 = nn.Conv2d(4, config.z_channels, 1) # 8
+            # self.post_quant_conv_new_2 = nn.Conv2d(2, config.z_channels, 1) # 4
 
             self.decoder_128 = Decoder(ch=32, ch_mult=[2, 2, 2, 2],z_channels=config.z_channels, out_channels=3)
             self.decoder_64 = Decoder(ch=32, ch_mult=[2, 2, 2],z_channels=config.z_channels, out_channels=3)
@@ -90,23 +96,41 @@ class VQModel(nn.Module):
     
     def decode_intermediate(self, quant):
         assert self.matryoshka == True, "matryoshka must be true"
-        quant_32 = self.post_quant_conv_new_32(quant[:, :32, :, :])
-        dec_128 = self.decoder_128(quant_32)
+        quant_48 = self.post_qc_48(quant[:, :48, :, :])
+        dec_128 = self.decoder_128(quant_48)
 
-        quant_24 = self.post_quant_conv_new_24(quant[:, :24, :, :])
-        dec_64 = self.decoder_64(quant_24)
+        quant_32 = self.post_qc_32(quant[:, :32, :, :])
+        dec_64 = self.decoder_64(quant_32)
 
-        quant_16 = self.post_quant_conv_new_16(quant[:, :16, :, :])
-        dec_32 = self.decoder_32(quant_16)
+        quant_24 = self.post_qc_24(quant[:, :24, :, :])
+        dec_32 = self.decoder_32(quant_24)
 
-        quant_8 = self.post_quant_conv_new_8(quant[:, :8, :, :])
-        dec_16 = self.decoder_16(quant_8)
+        quant_16 = self.post_qc_16(quant[:, :16, :, :])
+        dec_16 = self.decoder_16(quant_16)
 
-        quant_4 = self.post_quant_conv_new_4(quant[:, :4, :, :])
-        dec_8 = self.decoder_8(quant_4)
+        quant_8 = self.post_qc_8(quant[:, :8, :, :])
+        dec_8 = self.decoder_8(quant_8)
 
-        quant_2 = self.post_quant_conv_new_2(quant[:, :2, :, :])
-        dec_4 = self.decoder_4(quant_2)
+        quant_4 = self.post_qc_4(quant[:, :4, :, :])
+        dec_4 = self.decoder_4(quant_4)
+
+        # quant_32 = self.post_quant_conv_new_32(quant[:, :32, :, :])
+        # dec_128 = self.decoder_128(quant_32)
+
+        # quant_24 = self.post_quant_conv_new_24(quant[:, :24, :, :])
+        # dec_64 = self.decoder_64(quant_24)
+
+        # quant_16 = self.post_quant_conv_new_16(quant[:, :16, :, :])
+        # dec_32 = self.decoder_32(quant_16)
+
+        # quant_8 = self.post_quant_conv_new_8(quant[:, :8, :, :])
+        # dec_16 = self.decoder_16(quant_8)
+
+        # quant_4 = self.post_quant_conv_new_4(quant[:, :4, :, :])
+        # dec_8 = self.decoder_8(quant_4)
+
+        # quant_2 = self.post_quant_conv_new_2(quant[:, :2, :, :])
+        # dec_4 = self.decoder_4(quant_2)
 
         return (dec_128, dec_64, dec_32, dec_16, dec_8, dec_4)
     

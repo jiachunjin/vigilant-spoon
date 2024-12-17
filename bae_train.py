@@ -50,11 +50,11 @@ def main():
             print(f'autoencoder ckpt loaded from {config.train.ae_resume_path}')
     if config.train.loss_resume_path is not None:
         ckpt = torch.load(config.train.loss_resume_path, map_location='cpu')
-        m, u = loss.load_state_dict(ckpt, strict=False)
-        print('missing: ', m)
-        print('unexpected: ', u)
-        if accelerator.is_main_process:
-            print(f'loss ckpt loaded from {config.train.loss_resume_path}')
+        m, u = loss.load_state_dict(ckpt, strict=True)
+        # print('missing: ', m)
+        # print('unexpected: ', u)
+        # if accelerator.is_main_process:
+            # print(f'loss ckpt loaded from {config.train.loss_resume_path}')
 
 
     params_to_learn = list(vqvae.parameters())
@@ -117,7 +117,7 @@ def main():
                     accelerator.clip_grad_norm_(params_to_learn, 1.0)
                 # accelerator.backward(loss_gen)
                 # accelerator.backward(loss_gen + loss_intermediate)
-                accelerator.backward(loss_gen + loss_intermediate - 0.25 * loss_entropy.mean())
+                accelerator.backward(loss_gen + 0.5 * loss_intermediate - 0.1 * loss_entropy.mean())
                 optimizer.step()
 
                 loss_disc = loss(x, rec, optimizer_idx=1, global_step=global_step+1)
@@ -139,14 +139,14 @@ def main():
                 accelerator.log(logs, step=global_step)
                 progress_bar.set_postfix(**logs)
 
-            if global_step > 0 and global_step % config.train.val_every == 0 and accelerator.is_main_process:
-                vqvae.eval()
-                recon_path = os.path.join('./assets/recons', config.train.exp_name)
-                os.makedirs(recon_path, exist_ok=True)
+            # if global_step > 0 and global_step % config.train.val_every == 0 and accelerator.is_main_process:
+            #     vqvae.eval()
+            #     recon_path = os.path.join('./assets/recons', config.train.exp_name)
+            #     os.makedirs(recon_path, exist_ok=True)
                 
-                with torch.no_grad():
-                    img_dec = reconstrut_image(vqvae)
-                img_dec.save(os.path.join(recon_path, f'{global_step:05d}.png'))
+            #     with torch.no_grad():
+            #         img_dec = reconstrut_image(vqvae)
+            #     img_dec.save(os.path.join(recon_path, f'{global_step:05d}.png'))
 
             if global_step > 0 and global_step % config.train.save_every == 0 and accelerator.is_main_process:
                 vqvae.eval()

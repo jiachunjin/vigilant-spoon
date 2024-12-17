@@ -52,13 +52,14 @@ class Loss_entropy():
     def __init__(self, device):
         initial_value = 1.0
         decay_factor = 0.8
-        num_dims = 32
+        # decay_factor = 0.5
+        num_dims = 64
 
         factors = torch.ones(num_dims)
         factors[1:] = decay_factor 
 
-        weight = torch.cumprod(factors, dim=0) * initial_value
-        self.weight = torch.cat([weight, torch.zeros_like(weight)], dim=0).to(device)
+        self.weight = torch.cumprod(factors, dim=0).to(device) * initial_value
+        # self.weight = torch.cat([weight, torch.zeros_like(weight)], dim=0).to(device)
 
     @staticmethod
     def bernoulli_entropy(p):
