@@ -27,12 +27,12 @@ class VQModel(nn.Module):
 
         # used only when matryoshka
         if self.matryoshka:
-            self.post_quant_conv_new_32 = nn.Conv2d(32, config.z_channels, 1) # 128
-            self.post_quant_conv_new_24 = nn.Conv2d(24, config.z_channels, 1) # 64
-            self.post_quant_conv_new_16 = nn.Conv2d(16, config.z_channels, 1) # 32
-            self.post_quant_conv_new_8 = nn.Conv2d(8, config.z_channels, 1) # 16
-            self.post_quant_conv_new_4 = nn.Conv2d(4, config.z_channels, 1) # 8
-            self.post_quant_conv_new_2 = nn.Conv2d(2, config.z_channels, 1) # 4
+            self.post_qc_48 = nn.Conv2d(48, config.z_channels, 1) # 128
+            self.post_qc_32 = nn.Conv2d(32, config.z_channels, 1) # 64
+            self.post_qc_24 = nn.Conv2d(24, config.z_channels, 1) # 32
+            self.post_qc_16 = nn.Conv2d(16, config.z_channels, 1) # 16
+            self.post_qc_8 = nn.Conv2d(8, config.z_channels, 1) # 8
+            self.post_qc_4 = nn.Conv2d(4, config.z_channels, 1) # 4
 
             self.decoder_128 = Decoder(ch=32, ch_mult=[2, 2, 2, 2],z_channels=config.z_channels, out_channels=3)
             self.decoder_64 = Decoder(ch=32, ch_mult=[2, 2, 2],z_channels=config.z_channels, out_channels=3)
@@ -42,20 +42,6 @@ class VQModel(nn.Module):
             self.decoder_4 = Decoder(ch=32, ch_mult=[2, 2],z_channels=config.z_channels, out_channels=3, downsample=4)
         else:
             raise NotImplementedError
-            # 这里matryoshka=False的意思有歧义，但是暂时先这样
-            # self.post_quant_conv_matryoshka_32 = nn.Conv2d(32, config.z_channels, 1)
-            # self.post_quant_conv_matryoshka_16 = nn.Conv2d(16, config.z_channels, 1)
-            # self.post_quant_conv_matryoshka_8 = nn.Conv2d(8, config.z_channels, 1)
-            # self.post_quant_conv_matryoshka_4 = nn.Conv2d(4, config.z_channels, 1)
-            # self.post_quant_conv_matryoshka_2 = nn.Conv2d(2, config.z_channels, 1)
-            # self.post_quant_conv_matryoshka_1 = nn.Conv2d(1, config.z_channels, 1)
-
-            # self.decoder_matryoshka_32 = Decoder(ch=32, ch_mult=[1, 1, 1, 1, 1],z_channels=256, out_channels=3)
-            # self.decoder_matryoshka_16 = Decoder(ch=32, ch_mult=[1, 1, 1, 1, 1],z_channels=256, out_channels=3)
-            # self.decoder_matryoshka_8 = Decoder(ch=32, ch_mult=[1, 1, 1, 1, 1],z_channels=256, out_channels=3)
-            # self.decoder_matryoshka_4 = Decoder(ch=32, ch_mult=[1, 1, 1, 1, 1],z_channels=256, out_channels=3)
-            # self.decoder_matryoshka_2 = Decoder(ch=32, ch_mult=[1, 1, 1, 1, 1],z_channels=256, out_channels=3)
-            # self.decoder_matryoshka_1 = Decoder(ch=32, ch_mult=[1, 1, 1, 1, 1],z_channels=256, out_channels=3)
 
     def encode_binary(self, x):
         h = self.encoder(x)
@@ -90,48 +76,25 @@ class VQModel(nn.Module):
     
     def decode_intermediate(self, quant):
         assert self.matryoshka == True, "matryoshka must be true"
-        quant_32 = self.post_quant_conv_new_32(quant[:, :32, :, :])
-        dec_128 = self.decoder_128(quant_32)
+        quant_48 = self.post_qc_48(quant[:, :48, :, :])
+        dec_128 = self.decoder_128(quant_48)
 
-        quant_24 = self.post_quant_conv_new_24(quant[:, :24, :, :])
-        dec_64 = self.decoder_64(quant_24)
+        quant_32 = self.post_qc_32(quant[:, :32, :, :])
+        dec_64 = self.decoder_64(quant_32)
 
-        quant_16 = self.post_quant_conv_new_16(quant[:, :16, :, :])
-        dec_32 = self.decoder_32(quant_16)
+        quant_24 = self.post_qc_24(quant[:, :24, :, :])
+        dec_32 = self.decoder_32(quant_24)
 
-        quant_8 = self.post_quant_conv_new_8(quant[:, :8, :, :])
-        dec_16 = self.decoder_16(quant_8)
+        quant_16 = self.post_qc_16(quant[:, :16, :, :])
+        dec_16 = self.decoder_16(quant_16)
 
-        quant_4 = self.post_quant_conv_new_4(quant[:, :4, :, :])
-        dec_8 = self.decoder_8(quant_4)
+        quant_8 = self.post_qc_8(quant[:, :8, :, :])
+        dec_8 = self.decoder_8(quant_8)
 
-        quant_2 = self.post_quant_conv_new_2(quant[:, :2, :, :])
-        dec_4 = self.decoder_4(quant_2)
+        quant_4 = self.post_qc_4(quant[:, :4, :, :])
+        dec_4 = self.decoder_4(quant_4)
 
         return (dec_128, dec_64, dec_32, dec_16, dec_8, dec_4)
-    
-    def decode_matryoshka(self, quant):
-        raise NotImplementedError
-        assert self.matryoshka == False, "matryoshka must be false at this stage"
-        quant_32 = self.post_quant_conv_matryoshka_32(quant[:, :32, :, :])
-        dec_32 = self.decoder_matryoshka_32(quant_32)
-
-        quant_16 = self.post_quant_conv_matryoshka_16(quant[:, :16, :, :])
-        dec_16 = self.decoder_matryoshka_16(quant_16)
-
-        quant_8 = self.post_quant_conv_matryoshka_8(quant[:, :8, :, :])
-        dec_8 = self.decoder_matryoshka_8(quant_8)
-
-        quant_4 = self.post_quant_conv_matryoshka_4(quant[:, :4, :, :])
-        dec_4 = self.decoder_matryoshka_4(quant_4)
-
-        quant_2 = self.post_quant_conv_matryoshka_2(quant[:, :2, :, :])
-        dec_2 = self.decoder_matryoshka_2(quant_2)
-
-        quant_1 = self.post_quant_conv_matryoshka_1(quant[:, :1, :, :])
-        dec_1 = self.decoder_matryoshka_1(quant_1)
-
-        return (dec_32, dec_16, dec_8, dec_4, dec_2, dec_1)
 
     def get_bernoulli(self, x):
         h = self.encoder(x)
@@ -167,76 +130,6 @@ class VQModel(nn.Module):
         binary_samples = rearrange(binary_samples, 'b h w c -> b (h w) c')
         h = rearrange(h, 'b h w c -> b (h w) c')
         return binary_samples, h
-
-    # def encode_fsq_quant(self, x):
-    #     h = self.encoder(x)
-    #     h = self.quant_conv_new(h)
-    #     h = rearrange(h, 'b c h w -> b h w c')
-
-    #     levels = [4] * 4
-    #     scale = (torch.as_tensor(levels, device=x.device))
-
-    #     z = scale * torch.nn.functional.sigmoid(h)
-    #     zhat = torch.round(z)
-    #     quant = z + (zhat - z).detach()
-    #     quant = rearrange(quant, 'b h w c -> b c h w')
-
-    #     return quant
-    
-    # def encode_fsq_quant_residual_3(self, x, manual_level=None):
-    #     h = self.encoder(x)
-    #     h = self.quant_conv_new(h)
-
-    #     h = rearrange(h, 'b c h w -> b h w c')
-    #     h_ = torch.nn.functional.sigmoid(h)
-
-    #     if self.training:
-    #         num_quant_layers = random.randint(1, 3)
-    #     else:
-    #         num_quant_layers = 3
-    #         if manual_level is not None:
-    #             num_quant_layers = manual_level
-    #         print(num_quant_layers)
-    #     scale = torch.as_tensor([4] * self.config.codebook_embed_dim, device=x.device)
-    #     residual = torch.nn.functional.sigmoid(h)
-
-    #     approx = 0
-    #     for i in range(num_quant_layers):
-    #         z = scale * residual
-    #         zhat = torch.floor(z)
-    #         approx += zhat / scale / (4 ** i)
-    #         residual = residual - zhat / scale # (0, 1)
-    #         residual *= 4
-        
-    #     quant = h_ + (approx - h_).detach()
-    #     # quant = quant * 64
-    #     quant = self.linear(quant * 64)
-        
-    #     quant = rearrange(quant, 'b h w c -> b c h w')
-
-    #     return quant
-
-    # def encode(self, x):
-    #     h = self.encoder(x)
-    #     h = self.quant_conv(h)
-    #     quant, emb_loss, info = self.quantize(h)
-    #     return quant, emb_loss, info
-
-    # def decode(self, quant):
-    #     quant = self.post_quant_conv(quant)
-    #     dec = self.decoder(quant)
-    #     return dec
-
-    # def decode_code(self, code_b, shape=None, channel_first=True):
-    #     quant_b = self.quantize.get_codebook_entry(code_b, shape, channel_first)
-    #     dec = self.decode(quant_b)
-    #     return dec
-
-    # def forward(self, input):
-    #     quant, diff, _ = self.encode(input)
-    #     dec = self.decode(quant)
-    #     return dec, diff
-
 
 
 class Encoder(nn.Module):
@@ -375,88 +268,6 @@ class Decoder(nn.Module):
         h = nonlinearity(h)
         h = self.conv_out(h)
         return h
-
-
-# class VectorQuantizer(nn.Module):
-#     def __init__(self, n_e, e_dim, beta, entropy_loss_ratio, l2_norm, show_usage):
-#         super().__init__()
-#         self.n_e = n_e
-#         self.e_dim = e_dim
-#         self.beta = beta
-#         self.entropy_loss_ratio = entropy_loss_ratio
-#         self.l2_norm = l2_norm
-#         self.show_usage = show_usage
-
-#         self.embedding = nn.Embedding(self.n_e, self.e_dim)
-#         self.embedding.weight.data.uniform_(-1.0 / self.n_e, 1.0 / self.n_e)
-#         if self.l2_norm:
-#             self.embedding.weight.data = F.normalize(self.embedding.weight.data, p=2, dim=-1)
-#         if self.show_usage:
-#             self.register_buffer("codebook_used", nn.Parameter(torch.zeros(65536)))
-
-    
-#     def forward(self, z):
-#         # reshape z -> (batch, height, width, channel) and flatten
-#         z = torch.einsum('b c h w -> b h w c', z).contiguous()
-#         z_flattened = z.view(-1, self.e_dim)
-#         # distances from z to embeddings e_j (z - e)^2 = z^2 + e^2 - 2 e * z
-
-#         if self.l2_norm:
-#             z = F.normalize(z, p=2, dim=-1)
-#             z_flattened = F.normalize(z_flattened, p=2, dim=-1)
-#             embedding = F.normalize(self.embedding.weight, p=2, dim=-1)
-#         else:
-#             embedding = self.embedding.weight
-
-#         d = torch.sum(z_flattened ** 2, dim=1, keepdim=True) + \
-#             torch.sum(embedding**2, dim=1) - 2 * \
-#             torch.einsum('bd,dn->bn', z_flattened, torch.einsum('n d -> d n', embedding))
-
-#         min_encoding_indices = torch.argmin(d, dim=1)
-#         z_q = embedding[min_encoding_indices].view(z.shape)
-#         perplexity = None
-#         min_encodings = None
-#         vq_loss = None
-#         commit_loss = None
-#         entropy_loss = None
-#         codebook_usage = 0
-
-#         if self.show_usage and self.training:
-#             cur_len = min_encoding_indices.shape[0]
-#             self.codebook_used[:-cur_len] = self.codebook_used[cur_len:].clone()
-#             self.codebook_used[-cur_len:] = min_encoding_indices
-#             codebook_usage = len(torch.unique(self.codebook_used)) / self.n_e
-
-#         # compute loss for embedding
-#         if self.training:
-#             vq_loss = torch.mean((z_q - z.detach()) ** 2) 
-#             commit_loss = self.beta * torch.mean((z_q.detach() - z) ** 2) 
-#             entropy_loss = self.entropy_loss_ratio * compute_entropy_loss(-d)
-
-#         # preserve gradients
-#         z_q = z + (z_q - z).detach()
-
-#         # reshape back to match original input shape
-#         z_q = torch.einsum('b h w c -> b c h w', z_q)
-
-#         return z_q, (vq_loss, commit_loss, entropy_loss, codebook_usage), (perplexity, min_encodings, min_encoding_indices)
-
-#     def get_codebook_entry(self, indices, shape=None, channel_first=True):
-#         # shape = (batch, channel, height, width) if channel_first else (batch, height, width, channel)
-#         if self.l2_norm:
-#             embedding = F.normalize(self.embedding.weight, p=2, dim=-1)
-#         else:
-#             embedding = self.embedding.weight
-#         z_q = embedding[indices]  # (b*h*w, c)
-
-#         if shape is not None:
-#             if channel_first:
-#                 z_q = z_q.reshape(shape[0], shape[2], shape[3], shape[1])
-#                 # reshape back to match original input shape
-#                 z_q = z_q.permute(0, 3, 1, 2).contiguous()
-#             else:
-#                 z_q = z_q.view(shape)
-#         return z_q
 
 
 class ResnetBlock(nn.Module):
@@ -619,15 +430,3 @@ def compute_entropy_loss(affinity, loss_type="softmax", temperature=0.01):
     sample_entropy = - torch.mean(torch.sum(target_probs * log_probs, dim=-1))
     loss = sample_entropy - avg_entropy
     return loss
-
-
-#################################################################################
-#                              VQ Model Configs                                 #
-#################################################################################
-# def VQ_8(**kwargs):
-#     return VQModel(ModelArgs(encoder_ch_mult=[1, 2, 2, 4], decoder_ch_mult=[1, 2, 2, 4], **kwargs))
-
-# def VQ_16(**kwargs):
-#     return VQModel(ModelArgs(encoder_ch_mult=[1, 1, 2, 2, 4], decoder_ch_mult=[1, 1, 2, 2, 4], **kwargs))
-
-# VQ_models = {'VQ-16': VQ_16, 'VQ-8': VQ_8}

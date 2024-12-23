@@ -1,1 +1,1 @@
-python -m pytorch_fid /home/jiachun/codebase/rfsq/eval/ori /home/jiachun/codebase/rfsq/eval/rec --device cuda:1
+python -m pytorch_fid /home/jiachun/codebase/rfsq/eval/ori /home/jiachun/codebase/rfsq/eval/rec --device cuda:5

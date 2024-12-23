@@ -13,12 +13,9 @@ from model.gpt.gpt_bin import Transformer_bin, ModelArgs
 
 from utils.data_utils import get_dataloader
 
-def get_models():
-    # gpt = Transformer(ModelArgs(n_layer=12, n_head=12, dim=768, class_dropout_prob=0.0)) # 111M
-    gpt = Transformer_bin(ModelArgs(n_layer=12, n_head=12, dim=768, class_dropout_prob=0.0)) # 111M
-    # gpt = Transformer_bin(ModelArgs(n_layer=24, n_head=16, dim=1024, class_dropout_prob=0.0)) # 111M
-    # gpt = Transformer(ModelArgs(n_layer=24, n_head=16, dim=1024, class_dropout_prob=0.0))
-    config = OmegaConf.create({
+def get_models(config):
+    gpt = Transformer_bin(ModelArgs(n_layer=config.n_layer, n_head=config.n_head, dim=config.dim, class_dropout_prob=config.class_dropout_prob))
+    tokenizer_config = OmegaConf.create({
         'codebook_dim': 64,
         'encoder_ch_mult': [1, 1, 2, 2, 4],
         'decoder_ch_mult': [1, 1, 2, 2, 4],
@@ -26,10 +23,10 @@ def get_models():
         'use_negative': False,
         'z_channels': 256,
         'dropout_p': 0.0,
-        'matryoshka': False,
+        'matryoshka': True,
     })
-    bae = VQModel(config)
-    ckpt = torch.load('ckpts/a800/vqvae-matryoshka_64-85k', map_location='cpu')
+    bae = VQModel(tokenizer_config)
+    ckpt = torch.load(config.tokenizer_path, map_location='cpu')
     bae.load_state_dict(ckpt, strict=False)
     bae.eval()
     bae.requires_grad_(False)
@@ -53,7 +50,7 @@ def get_accelerator(config):
 def main():
     config = OmegaConf.load('config/gpt_bin.yaml')
     accelerator, output_dir = get_accelerator(config.train)
-    gpt, bae = get_models()
+    gpt, bae = get_models(config.gpt)
     dataloader = get_dataloader(config.data)
     global_step = config.train.global_step if config.train.global_step is not None else 0
 
@@ -116,14 +113,6 @@ def main():
                 global_step += 1
                 progress_bar.update(1)
                 loss = accelerator.gather(loss.detach()).mean().item()
-                # loss1 = accelerator.gather(losses[0].detach()).mean().item()
-                # loss2 = accelerator.gather(losses[1].detach()).mean().item()
-                # loss3 = accelerator.gather(losses[2].detach()).mean().item()
-                # loss4 = accelerator.gather(losses[3].detach()).mean().item()
-                # # loss5 = accelerator.gather(losses[4].detach()).mean().item()
-                # loss6 = accelerator.gather(losses[5].detach()).mean().item()
-                # loss7 = accelerator.gather(losses[6].detach()).mean().item()
-
 
                 logs = {'loss': loss}
                 accelerator.log(logs, step=global_step)
