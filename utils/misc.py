@@ -34,7 +34,7 @@ def get_validation_img(img_path):
 def reconstrut_image(vqvae):
     vqvae.eval()
     device = next(vqvae.parameters()).device
-    val_img, inverse_transform = get_validation_img('/home/jiachun/codebase/rfsq/assets/traffic.jpeg')
+    val_img, inverse_transform = get_validation_img('assets/traffic.jpeg')
     val_img = val_img.unsqueeze(0).to(device)
     quant, h = vqvae.module.encode_binary(val_img)
     rec = vqvae.module.decode_fsq(quant)

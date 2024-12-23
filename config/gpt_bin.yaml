@@ -21,6 +21,6 @@ train:
   save_every: 10000 # to modify
 
 data:
-  # path: '/data/Largedata/ImageNet_wds/imagenet-train-{000000..001281}.tar' # to modify
-  path: '/data/Largedata/ImageNet_wds/imagenet-train-000004.tar' # to modify
+  path: '/data/Largedata/ImageNet_wds/imagenet-train-{000000..001281}.tar' # to modify
+  # path: '/data/Largedata/ImageNet_wds/imagenet-train-000004.tar' # to modify
   batch_size: 100 # to modify

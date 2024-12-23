@@ -10,22 +10,22 @@ model:
   
 
 train:
-  ae_resume_path: 'ckpts/a800/vqvae-matryoshka_64-170k'
-  loss_resume_path: 'experiment/matryoshka_64_newdec/loss-matryoshka_64_newdec-62k'
+  ae_resume_path: 'experiment/matryoshka_64/vqvae-matryoshka_64-170k'
+  loss_resume_path: 'experiment/matryoshka_64/loss-matryoshka_64-170k'
   global_step: 1
-  exp_name: &exp_name 'matryoshka_entropy'
+  exp_name: &exp_name 'new_dvd_0.8decay_0.5inter_0.1entropy'
   wandb_proj: *exp_name
   output_dir: *exp_name
   logging_dir: 'logs'
-  mixed_precision: 'bf16'
-  gradient_accumulation_steps: 4
+  mixed_precision: 'no'
+  gradient_accumulation_steps: 2
   report_to: 'wandb'
-  num_iters: 200000
-  val_every: 100
+  num_iters: 300000
+  val_every: 1000
   save_every: 1000
   disc_start: 1
-  disc_weight: 0.05
+  disc_weight: 0.03
 
 data:
-  path: '/data/Largedata/ImageNet_wds/imagenet-train-{000000..001281}.tar'
-  batch_size: 8
+  path: '/data/ImageNet/imagenet-train-{000000..001281}.tar'
+  batch_size: 30
