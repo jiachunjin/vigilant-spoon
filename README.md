@@ -1,3 +1,8 @@
+# Launch with one click
+```
+sh setup_and_launch.sh
+```
+---
 # Data preparation
 Download the ImageNet dataset in the webdataset format from [huggingface](https://huggingface.co/datasets/Cylarus/ImageNet).
 

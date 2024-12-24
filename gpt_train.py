@@ -100,7 +100,11 @@ def main():
                 cond_idx = y.long()
                 # targets = h[:, target_id, :]
 
-                _, loss = gpt(binary_vec=sample, cond_idx=cond_idx, targets=h, mask=causal_block_mask)
+                if config.train.targets == 'bits':
+                    targets = sample
+                elif config.train.targets == 'p':
+                    targets = h
+                _, loss = gpt(binary_vec=sample, cond_idx=cond_idx, targets=targets, mask=causal_block_mask)
 
                 optimizer.zero_grad()
                 if accelerator.sync_gradients:

@@ -5,22 +5,23 @@ gpt:
   n_head: 12
   dim: 768
   class_dropout_prob: 0.1
-  tokenizer_path: 'ckpts/a800/vqvae-new_decoder-266k' # to modify
+  tokenizer_path: './tokenizer/vqvae-new_decoder-266k'
 
 train:
   gpt_resume_path:
   global_step: 1
-  exp_name: &exp_name 'gpt_bin_ex'
+  exp_name: &exp_name 'gpt_86M_tok.77_full'
   wandb_proj: *exp_name
   output_dir: *exp_name
   logging_dir: 'logs'
   mixed_precision: 'bf16'
-  gradient_accumulation_steps: 1 # to modify
-  report_to: 'wandb' # modify to wandb
-  num_iters: 500000 # to modify
-  save_every: 10000 # to modify
+  gradient_accumulation_steps: 1
+  report_to: 'wandb'
+  num_iters: 160000
+  save_every: 5000
+  targets: 'p'
 
 data:
-  path: '/data/Largedata/ImageNet_wds/imagenet-train-{000000..001281}.tar' # to modify
-  # path: '/data/Largedata/ImageNet_wds/imagenet-train-000004.tar' # to modify
-  batch_size: 100 # to modify
+  path: './datasets/imagenet/imagenet-train-{000000..001281}.tar'
+  # path: './datasets/imagenet/imagenet-train-{000000..000001}.tar'
+  batch_size: 300 # to modify
